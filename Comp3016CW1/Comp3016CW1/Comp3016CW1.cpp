@@ -43,7 +43,7 @@ void Game::init() {
 		menuState->init(renderer, font);
 		worldMapState = new WorldMapState();
 		worldMapState->game = this;
-		//worldMapState->init(renderer, font);
+		worldMapState->init(renderer, font);
 		mazeState = new MazeState();
 		mazeState->game = this;
 		//mazeState->init(renderer, font);
@@ -220,6 +220,97 @@ void  GameState::update() {
 void  GameState::render() {
 
 }
+
+void WorldMapState::init(SDL_Renderer* renderer, TTF_Font* font) {
+	int buttonSize = 150;
+	int gap = 30;
+	int gridCols = 3;
+	int gridRows = 3;
+
+	int gridWidth = gridCols * buttonSize + (gridCols - 1) * gap;
+	int gridHeight = gridRows * buttonSize + (gridRows - 1) * gap;
+
+	int gridX = (game->SCREEN_WIDTH - gridWidth) / 2;
+	int gridY = (game->SCREEN_HEIGHT - gridHeight) / 2;
+
+	for (int i = 0; i < 9; i++) {
+		House newHouse = House();
+		HouseData newHouseData = HouseData();
+		newHouseData.name = "House " + to_string(i);
+		newHouseData.completed = false;
+		newHouseData.filePath = "";
+		newHouse.data = newHouseData;
+		this->houses.push_front(newHouse);
+
+		Button houseButton = Button();
+
+		
+
+		
+		int col = i % 3; // 0, 1, 2
+		int row = i / 3; // 0, 1, 2
+
+		int x = gridX + col * (buttonSize + gap);
+		int y = gridY + row * (buttonSize + gap);
+
+		houseButton.init(renderer, game, to_string(i + 1), x, y, buttonSize, buttonSize);
+
+		houseButton.setOnClick([this]() 
+			{ std::cout << "House clicked\n"; 
+			//game.ChangeState(mazeState); 
+			});
+
+		houseButtons.push_front(houseButton);
+	}
+
+	SDL_Color white = { 255, 255, 255, 255 };
+	SDL_Surface* topTextSurface = TTF_RenderText_Solid(font, "Please  select  a  house. ", white);
+	titleTexture = SDL_CreateTextureFromSurface(renderer, topTextSurface);
+	SDL_QueryTexture(titleTexture, nullptr, nullptr,&topTextW,&topTextH);
+	SDL_FreeSurface(topTextSurface);
+}
+void WorldMapState::handleEvents() {
+	SDL_Event e;
+	while (SDL_PollEvent(&e)) {
+		if (e.type == SDL_QUIT)
+			game->quit();
+
+		
+		for (auto& button : houseButtons) {
+			button.handleEvents(e);
+		}
+	}
+};
+
+void WorldMapState::update() {
+
+};
+
+void WorldMapState::render() {
+
+	SDL_SetRenderDrawColor(game->getRenderer(), 0, 0, 0, 255);
+	SDL_RenderClear(game->getRenderer());
+
+	if (titleTexture) {
+		SDL_Rect titleRect = { (game->SCREEN_WIDTH - topTextW) / 2, 100, topTextW, topTextH };
+		SDL_RenderCopy(game->getRenderer(), titleTexture, nullptr, &titleRect);
+	}
+
+	//loop through house buttons to render all of them
+	for (auto& button : houseButtons) {
+		button.render(game->getRenderer());
+	}
+
+	SDL_RenderPresent(game->getRenderer());
+
+	if (!titleTexture) std::cerr << "Title texture null!\n";
+	/*
+	if (startButton && startButton->textTexture == nullptr) {
+		std::cerr << "Start button texture null!\n";
+	}
+	if (endButton && endButton->textTexture == nullptr)
+		std::cerr << "End button texture null!\n";*/
+};
 
 int main(int argc, char* argv[])
 {

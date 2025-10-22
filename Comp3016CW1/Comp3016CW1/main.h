@@ -30,11 +30,11 @@ public:
 class House {
 public:
 	void render(SDL_Renderer* renderer);
-private:
 	HouseData data;
 	Vector2 position;
 	SDL_Texture* iconTexture;
 	bool isCompleted;
+
 };
 
 class Button {
@@ -89,10 +89,15 @@ private:
 };
 class WorldMapState :public GameState {
 public:
+	void init(SDL_Renderer* renderer, TTF_Font* font);
 	void onEnter();
-	void handleEvents() {};
-	void update() {};
-	void render() {};
+	void handleEvents();
+	void update();
+	void render();
+
+	std::list<Button> houseButtons;
+	SDL_Texture* titleTexture = nullptr;
+	int topTextW = 500, topTextH = 75;
 private:
 	std::list<House> houses;
 	int selecetedHouseIndex;
