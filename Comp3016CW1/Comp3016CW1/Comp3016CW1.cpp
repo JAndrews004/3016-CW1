@@ -3,7 +3,9 @@
 
 #include <iostream>
 #include "main.h"
-
+#include <fstream>
+#include <sstream>
+#include <random>
 using namespace std;
 
 Game::Game() : isRunning(true), gameOver(false), window(nullptr), renderer(nullptr), font(nullptr) {};
@@ -37,6 +39,8 @@ void Game::init() {
 			isRunning = false;
 			return;
 		}
+		srand(SDL_GetTicks());
+
 		//load house list from file
 		menuState = new MenuState();
 		menuState->game = this;
@@ -46,7 +50,12 @@ void Game::init() {
 		worldMapState->init(renderer, font);
 		mazeState = new MazeState();
 		mazeState->game = this;
-		//mazeState->init(renderer, font);
+		mazeState->init(renderer, font);
+
+		winLossState = new WinLossState();
+		winLossState->game = this;
+		winLossState->init(renderer, font);
+
 		currentState = menuState;
 		
 }
@@ -86,6 +95,9 @@ void Game::quit() {
 }
 void Game::changeState(GameState* newState) {
 	currentState = newState;
+
+	MazeState* ms = dynamic_cast<MazeState*>(newState);
+	if (ms) ms->OnEnter();
 }
 TTF_Font* Game::getFont() {
 	return font;
@@ -96,10 +108,14 @@ SDL_Renderer* Game::getRenderer() {
 WorldMapState* Game::GetWorldMapState() {
 	return worldMapState;
 }
+MazeState* Game::GetMazeState() {
+	return mazeState;
+}
 void MenuState::init(SDL_Renderer* renderer, TTF_Font* font) {
 	//std::cout << "Initialising buttons\n";
 	startButton = new Button();
 	endButton = new Button();
+
 
 	startButton->init(renderer,game, "Start", game->SCREEN_WIDTH/2 - 150, 400, 300, 120);
 	endButton->init(renderer,game, "Quit", game->SCREEN_WIDTH / 2 - 150,600 , 300, 120);
@@ -235,18 +251,13 @@ void WorldMapState::init(SDL_Renderer* renderer, TTF_Font* font) {
 
 	for (int i = 0; i < 9; i++) {
 		House newHouse = House();
-		HouseData newHouseData = HouseData();
-		newHouseData.name = "House " + to_string(i);
-		newHouseData.completed = false;
-		newHouseData.filePath = "";
-		newHouse.data = newHouseData;
-		this->houses.push_front(newHouse);
+		//pick random maze from list in game object that hasnt been picked
+		string FilePath = "";
+		newHouse.filePath = FilePath;
+		this->houses.push_back(newHouse);
 
 		Button houseButton = Button();
 
-		
-
-		
 		int col = i % 3; // 0, 1, 2
 		int row = i / 3; // 0, 1, 2
 
@@ -254,10 +265,10 @@ void WorldMapState::init(SDL_Renderer* renderer, TTF_Font* font) {
 		int y = gridY + row * (buttonSize + gap);
 
 		houseButton.init(renderer, game, to_string(i + 1), x, y, buttonSize, buttonSize);
-
 		houseButton.setOnClick([this]() 
 			{ std::cout << "House clicked\n"; 
-			//game.ChangeState(mazeState); 
+		      game->GetMazeState()->init(game->getRenderer(), game->getFont());
+			  game->changeState(game->GetMazeState()); 
 			});
 
 		houseButtons.push_front(houseButton);
@@ -301,21 +312,539 @@ void WorldMapState::render() {
 		button.render(game->getRenderer());
 	}
 
+	SDL_Color white = { 255, 255, 255, 255 };
+	string message = "Score: " + to_string(game->GetResources() * 10);
+	SDL_Surface* scoreTextSurface = TTF_RenderText_Solid(game->getFont(), message.c_str(), white);
+	scoreText = SDL_CreateTextureFromSurface(game->getRenderer(), scoreTextSurface);
+
+	message = "HP: " + to_string(game->GetHealth());
+	SDL_Surface* healthTextSurface = TTF_RenderText_Solid(game->getFont(), message.c_str(), white);
+	healthText = SDL_CreateTextureFromSurface(game->getRenderer(), healthTextSurface);
+
+	int topTextW = 100, topTextH = 50;
+	SDL_QueryTexture(scoreText, nullptr, nullptr, &topTextW, &topTextH);
+	SDL_FreeSurface(scoreTextSurface);
+	SDL_QueryTexture(healthText, nullptr, nullptr, &topTextW, &topTextH);
+	SDL_FreeSurface(healthTextSurface);
+
+	topTextW = 200;
+	topTextH = 100;
+	if (scoreText) {
+		SDL_Rect scoreRect = { 10, 50, topTextW, topTextH };
+		SDL_RenderCopy(game->getRenderer(), scoreText, nullptr, &scoreRect);
+	}
+	topTextH = 75;
+	if (healthText) {
+		SDL_Rect healthRect = { 10, 125, topTextW, topTextH };
+		SDL_RenderCopy(game->getRenderer(), healthText, nullptr, &healthRect);
+	}
+
 	SDL_RenderPresent(game->getRenderer());
 
 	if (!titleTexture) std::cerr << "Title texture null!\n";
-	/*
-	if (startButton && startButton->textTexture == nullptr) {
-		std::cerr << "Start button texture null!\n";
-	}
-	if (endButton && endButton->textTexture == nullptr)
-		std::cerr << "End button texture null!\n";*/
+	
 };
 
+void MazeState::init(SDL_Renderer* renderer, TTF_Font* font) {
+	loadHouse();
+	player = new Player();
+	player->lastTime = SDL_GetTicks();
+	player->currentMaze = this;
+
+	for (int i = 0; i < mazeGrid.size(); i++) {
+		for (int j = 0; j < mazeGrid[i].size(); j++) {
+			if (mazeGrid[i][j] == 2) {
+				int offsetX = game->SCREEN_WIDTH / 2 - (cols / 2) * tileSize;
+				int offsetY = game->SCREEN_HEIGHT / 2 - (rows / 2) * tileSize;
+				player->playerRect = { j * tileSize + offsetX + 10, i * tileSize + offsetY + 10,
+									   tileSize - 20, tileSize - 20 };
+			}
+		}
+	}
+
+	MakeEnemies();
+	buildWalls();
+	MakeResources();
+	FloorTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STATIC, tileSize, tileSize);
+	Uint32 pixels[64 * 64];
+	for (int i = 0; i < tileSize * tileSize; i++) {
+		pixels[i] = 0xFF0000FF;
+	}
+
+	SDL_UpdateTexture(FloorTexture, NULL, pixels, tileSize * sizeof(Uint32));
+
+	WallTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STATIC, tileSize, tileSize);
+	
+	for (int i = 0; i < tileSize * tileSize; i++) {
+		pixels[i] = 0x00FF00FF;
+	}
+
+	SDL_UpdateTexture(WallTexture, NULL, pixels, tileSize * sizeof(Uint32));
+
+	PlayerStartTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STATIC, tileSize, tileSize);
+	
+	for (int i = 0; i < tileSize * tileSize; i++) {
+		pixels[i] = 0x0000FFFF;
+	}
+
+	SDL_UpdateTexture(PlayerStartTexture, NULL, pixels, tileSize * sizeof(Uint32));
+
+	EnemyStartTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STATIC, tileSize, tileSize);
+	
+	for (int i = 0; i < tileSize * tileSize; i++) {
+		pixels[i] = 0xFF00FFFF;
+	}
+
+	SDL_UpdateTexture(EnemyStartTexture, NULL, pixels, tileSize * sizeof(Uint32));
+	
+	ResourceTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STATIC, tileSize, tileSize);
+	
+	for (int i = 0; i < tileSize * tileSize; i++) {
+		pixels[i] = 0x00FFFFFF;
+	}
+
+	SDL_UpdateTexture(ResourceTexture, NULL, pixels, tileSize * sizeof(Uint32));
+
+	EndTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STATIC, tileSize, tileSize);
+	
+	for (int i = 0; i < tileSize * tileSize; i++) {
+		pixels[i] = 0xFFFF00FF;
+	}
+	SDL_UpdateTexture(EndTexture, NULL, pixels, tileSize * sizeof(Uint32));
+
+	SDL_Color white = { 255, 255, 255, 255 };
+	string message = "Score: " + to_string(game->GetResources() * 10);
+	SDL_Surface* scoreTextSurface = TTF_RenderText_Solid(font, message.c_str(), white);
+	scoreText = SDL_CreateTextureFromSurface(renderer, scoreTextSurface);
+
+	message = "HP: " + to_string(game->GetHealth());
+	SDL_Surface* healthTextSurface = TTF_RenderText_Solid(font, message.c_str(), white);
+	healthText = SDL_CreateTextureFromSurface(renderer, healthTextSurface);
+
+	int topTextW = 100, topTextH = 50;
+	SDL_QueryTexture(scoreText, nullptr, nullptr, &topTextW, &topTextH);
+	SDL_FreeSurface(scoreTextSurface);
+	SDL_QueryTexture(healthText, nullptr, nullptr, &topTextW, &topTextH);
+	SDL_FreeSurface(healthTextSurface);
+	
+	SDL_SetRenderTarget(renderer, NULL);
+	
+	
+}
+void MazeState::buildWalls() {
+	int offsetX = game->SCREEN_WIDTH / 2 - (cols / 2) * tileSize;
+	int offsetY = game->SCREEN_HEIGHT / 2 - (rows / 2) * tileSize;
+
+	for (int i = 0; i < mazeGrid.size(); i++) {
+		for (int j = 0; j < mazeGrid[i].size(); j++) {
+			if (mazeGrid[i][j] == 1) {
+				SDL_Rect wallRect = { j * tileSize + offsetX, i * tileSize + offsetY, tileSize, tileSize };
+				player->walls.push_back(wallRect);
+			}
+		}
+	}
+}
+
+void MazeState::MakeResources() {
+	int offsetX = game->SCREEN_WIDTH / 2 - (cols / 2) * tileSize;
+	int offsetY = game->SCREEN_HEIGHT / 2 - (rows / 2) * tileSize;
+
+	for (int i = 0; i < mazeGrid.size(); i++) {
+		for (int j = 0; j < mazeGrid[i].size(); j++) {
+			if (mazeGrid[i][j] == 4) {
+				
+				SDL_Rect ResourceCollider = { j * tileSize + offsetX + 10, i * tileSize + offsetY +10, tileSize-20, tileSize-20 };
+				Resource* resource = new Resource(ResourceCollider);
+				resources.push_back(resource);
+				
+			}
+		}
+	}
+}
+
+void MazeState::MakeEnemies() {
+	int offsetX = game->SCREEN_WIDTH / 2 - (cols / 2) * tileSize;
+	int offsetY = game->SCREEN_HEIGHT / 2 - (rows / 2) * tileSize;
+
+	for (int i = 0; i < mazeGrid.size(); i++) {
+		for (int j = 0; j < mazeGrid[i].size(); j++) {
+			if (mazeGrid[i][j] == 3) {
+
+				SDL_Rect EnemyCollider = { j * tileSize + offsetX + 10, i * tileSize + offsetY + 10, tileSize - 20, tileSize - 20 };
+				Enemy* enemy = new Enemy(rand() % 2, EnemyCollider, this);
+				enemy->lastTime = SDL_GetTicks();
+				enemies.push_back(enemy);
+
+			}
+		}
+	}
+}
+void MazeState::OnEnter() {
+	Uint32 now = SDL_GetTicks();
+	if (player) player->lastTime = now;
+	for (auto& e : enemies) e->lastTime = now;
+}
+void MazeState :: loadHouse() {
+	mazeGrid = {};
+	enemies = {};
+	resources = {};
+	string mazeFile = {};
+	if (!game->mazeFileNames.empty()) {
+		mazeFile = game->mazeFileNames[rand() % game->mazeFileNames.size()];
+	}
+
+	//game->mazeFileNames[rand() % (game->mazeFileNames.size())]
+	ifstream file(mazeFile);
+
+	if (!file.is_open()) {
+		std::cerr << "Failed to open file: " << mazeFile << std::endl;
+	}
+	else {
+		std::string line;
+		while (std::getline(file, line)) {
+			std::vector<int> row;
+			std::istringstream iss(line);
+			int number;
+			while (iss >> number) {   // splits by spaces automatically
+				row.push_back(number);
+			}
+			mazeGrid.push_back(row);
+		}
+		file.close();
+	}
+
+	for (const auto& row : mazeGrid) {
+		for (int num : row) {
+			std::cout << num << " ";
+		}
+		std::cout << std::endl;
+	}
+}
+void MazeState::handleEvents() {
+	SDL_Event e;
+	while (SDL_PollEvent(&e)) {
+		if (e.type == SDL_QUIT) {
+			
+		}
+	}
+}
+void MazeState::update() {
+	
+	const Uint8* keys = SDL_GetKeyboardState(NULL);
+	player->handleInput(keys);
+	player->tryMove();
+	
+	for (int i = 0; i < resources.size(); i++) {
+		if (player->checkCollision(resources[i]->collider, player->playerRect)&& !resources[i]->collected) {
+			game->addResource();
+			resources[i]->collected = true;
+		}
+	}
+	for (int i = 0; i < enemies.size(); i++) {
+		enemies[i]->tryMove();
+		if (enemies[i]->checkCollision(enemies[i]->collider, player->playerRect)) {
+			game->takeLife();
+			if (game->GetHealth() <= 0) {
+				game->changeState(game->GetWinLossState());
+			}
+			else {
+				game->changeState(game->GetWorldMapState());
+			}
+
+		}
+	}
+
+	showExitMessage = player->checkCollision(player->playerRect, exitRect);
+}
+void MazeState::render() {
+	SDL_SetRenderDrawColor(game->getRenderer(), 0, 0, 0, 255);
+	SDL_RenderClear(game->getRenderer());
+
+	//loop through mazeGrid and make rectangle of tileSize x tileSize with colour dependant on number
+
+	int offsetX = game->SCREEN_WIDTH / 2 - (cols/2) * tileSize, offsetY = game->SCREEN_HEIGHT / 2 - (rows / 2) * tileSize;
+	for (int i = 0; i < mazeGrid.size(); i++) {
+		for (int j = 0; j < mazeGrid[i].size(); j++) {
+			SDL_Rect tileRect = { j * tileSize + offsetX, i * tileSize + offsetY, tileSize, tileSize };
+
+			switch (mazeGrid[i][j]) {
+			case 0:
+				SDL_RenderCopy(game->getRenderer(), FloorTexture, nullptr, &tileRect);
+				break;
+			case 1:
+				SDL_RenderCopy(game->getRenderer(), WallTexture, nullptr, &tileRect);
+				break;
+			case 2:
+				SDL_RenderCopy(game->getRenderer(), PlayerStartTexture, nullptr, &tileRect);
+				
+				break;
+			case 3:
+				SDL_RenderCopy(game->getRenderer(), EnemyStartTexture, nullptr, &tileRect);
+				break;
+			case 4:
+				SDL_RenderCopy(game->getRenderer(), ResourceTexture, nullptr, &tileRect);
+				break;
+			case 5:
+				SDL_RenderCopy(game->getRenderer(), EndTexture, nullptr, &tileRect);
+				exitRect = tileRect;
+				break;
+			}
+			
+		}
+	}
+	SDL_SetRenderDrawColor(game->getRenderer(), 0, 200, 255, 255);
+	SDL_RenderFillRect(game->getRenderer(), &player->playerRect);
+
+	
+	for (int i = 0; i < enemies.size(); i++) {
+		SDL_SetRenderDrawColor(game->getRenderer(), 255, 100, 0, 255);
+		SDL_RenderFillRect(game->getRenderer(), &enemies[i]->collider);
+
+	}
+	for (int i = 0; i < resources.size(); i++) {
+		if (!resources[i]->collected) {
+			SDL_SetRenderDrawColor(game->getRenderer(), 0, 100, 255, 255);
+			SDL_RenderFillRect(game->getRenderer(), &resources[i]->collider);
+		}
+	}
+
+	SDL_Color white = { 255, 255, 255, 255 };
+	string message = "Score: " + to_string(game->GetResources() * 10);
+	SDL_Surface* scoreTextSurface = TTF_RenderText_Solid(game->getFont(), message.c_str(), white);
+	scoreText = SDL_CreateTextureFromSurface(game->getRenderer(), scoreTextSurface);
+
+	message = "HP: " + to_string(game->GetHealth());
+	SDL_Surface* healthTextSurface = TTF_RenderText_Solid(game->getFont(), message.c_str(), white);
+	healthText = SDL_CreateTextureFromSurface(game->getRenderer(), healthTextSurface);
+
+	message = "Press E To exit house";
+	SDL_Surface* exitTextSurface = TTF_RenderText_Solid(game->getFont(), message.c_str(), white);
+	exitText = SDL_CreateTextureFromSurface(game->getRenderer(), exitTextSurface);
+
+	int topTextW = 100, topTextH = 50;
+	SDL_QueryTexture(scoreText, nullptr, nullptr, &topTextW, &topTextH);
+	SDL_FreeSurface(scoreTextSurface);
+	SDL_QueryTexture(healthText, nullptr, nullptr, &topTextW, &topTextH);
+	SDL_FreeSurface(healthTextSurface);
+	//topTextW = 100, topTextH = 50;
+	SDL_QueryTexture(exitText, nullptr, nullptr, &topTextW, &topTextH);
+	SDL_FreeSurface(exitTextSurface);
+
+	topTextW = 200;
+	topTextH = 100;
+	if (scoreText) {
+		SDL_Rect scoreRect = { 10, 50, topTextW, topTextH };
+		SDL_RenderCopy(game->getRenderer(), scoreText, nullptr, &scoreRect);
+	}
+	topTextH = 75;
+	if (healthText) {
+		SDL_Rect healthRect = { 10, 125, topTextW, topTextH };
+		SDL_RenderCopy(game->getRenderer(), healthText, nullptr, &healthRect);
+	}
+
+	if (exitText && showExitMessage) {
+		SDL_Rect exitTextRect = { (game->SCREEN_WIDTH - topTextW) / 2, 100, topTextW, topTextH };
+		SDL_RenderCopy(game->getRenderer(), exitText, nullptr, &exitTextRect);
+	}
+	SDL_RenderPresent(game->getRenderer());
+}
+
+void WinLossState::init(SDL_Renderer* renderer, TTF_Font* font) {
+	
+	SDL_Color red = { 255, 0, 0, 255 };
+	string message = "You died";
+	SDL_Surface* titleTextSurface = TTF_RenderText_Solid(font, message.c_str(), red);
+	titleTexture = SDL_CreateTextureFromSurface(renderer, titleTextSurface);
+
+	SDL_Color white = { 255, 255, 255, 255 };
+	message = "Final score " + to_string(game->GetResources() * 10);
+	SDL_Surface* ScoreTextSurface = TTF_RenderText_Solid(font, message.c_str(), white);
+	scoreTexture = SDL_CreateTextureFromSurface(renderer, ScoreTextSurface);
+
+	int topTextW = 400, topTextH = 200;
+
+	SDL_QueryTexture(titleTexture, nullptr, nullptr, &topTextW, &topTextH);
+	SDL_FreeSurface(titleTextSurface);
+
+	SDL_QueryTexture(scoreTexture, nullptr, nullptr, &topTextW, &topTextH);
+	SDL_FreeSurface(ScoreTextSurface);
+
+	restartButton = new Button();
+	restartButton->init(renderer, game, "Restart", game->SCREEN_WIDTH / 2 - 275, 500, 550, 180);
+	restartButton->setOnClick([this]() {
+		game->resetHealth();
+		game->changeState(game->GetMenuState());
+		});
+
+	
+}
+void WinLossState::render() {
+	
+	if (win) {
+		SDL_Color green = { 0, 255, 0, 255 };
+		string message = "Congratulations you survived!";
+		SDL_Surface* titleTextSurface = TTF_RenderText_Solid(game->getFont(), message.c_str(), green);
+		titleTexture = SDL_CreateTextureFromSurface(game->getRenderer(), titleTextSurface);
+		int topTextW = 400, topTextH = 200;
+		SDL_QueryTexture(titleTexture, nullptr, nullptr, &topTextW, &topTextH);
+		SDL_FreeSurface(titleTextSurface);
+	}
+	
+	SDL_SetRenderDrawColor(game->getRenderer(), 0, 0, 0, 255);
+	SDL_RenderClear(game->getRenderer());
+
+	
+	int topTextW = 400, topTextH = 200;
+	if (titleTexture) {
+		SDL_Rect titleRect = { (game->SCREEN_WIDTH - topTextW) / 2, 100, topTextW, topTextH };
+		SDL_RenderCopy(game->getRenderer(), titleTexture, nullptr, &titleRect);
+	}
+
+	if (scoreTexture) {
+		SDL_Rect scoreRect = { (game->SCREEN_WIDTH - topTextW) / 2, 250, topTextW, topTextH };
+		SDL_RenderCopy(game->getRenderer(), scoreTexture, nullptr, &scoreRect);
+	}
+
+	if (restartButton) restartButton->render(game->getRenderer());
+	
+	
+	SDL_RenderPresent(game->getRenderer());
+	
+}
+void WinLossState::handleEvents() {
+	SDL_Event e;
+	while (SDL_PollEvent(&e)) {
+		if (e.type == SDL_QUIT)
+			game->quit();
+
+		restartButton->handleEvents(e);
+		
+	}
+}
+void WinLossState::update() {
+
+}
+void Player::handleInput(const Uint8 * keys) {
+	velX = 0;
+	velY = 0;
+
+	if (keys[SDL_SCANCODE_W]) velY = -speed;
+	if (keys[SDL_SCANCODE_S]) velY = speed;
+	if (keys[SDL_SCANCODE_A]) velX = -speed;
+	if (keys[SDL_SCANCODE_D]) velX = speed;
+	if(keys[SDL_SCANCODE_E]) 
+	{
+		ExitMaze();
+	}
+}
+
+void Player::ExitMaze() {
+	if (checkCollision(playerRect, currentMaze->exitRect)) {
+		currentMaze->game->changeState(currentMaze->game->GetWorldMapState());
+	}
+}
+
+
+void Player::tryMove() {
+	Uint32 currentTime = SDL_GetTicks();
+	float deltaTime = (currentTime - lastTime) / 1000.0f;
+	lastTime = currentTime;
+
+	SDL_Rect nextPos = playerRect;
+
+	nextPos.x += velX * deltaTime;
+	bool collidedX = false;
+	for (auto& wall : walls) {
+		if (checkCollision(nextPos, wall)) {
+			collidedX = true;
+			break;
+		}
+	}
+	if (!collidedX) playerRect.x = nextPos.x;
+
+	nextPos = playerRect;
+	nextPos.y += velY * deltaTime;
+	bool collidedY = false;
+	for (auto& wall : walls) {
+		if (checkCollision(nextPos, wall)) {
+			collidedY = true;
+			break;
+		}
+	}
+	if (!collidedY) playerRect.y = nextPos.y;
+}
+
+void Enemy::Update() {
+	
+}
+void Enemy::tryMove() {
+	Uint32 currentTime = SDL_GetTicks();
+	float deltaTime = (currentTime - lastTime) / 1000.0f;
+	lastTime = currentTime;
+
+	//std::cout << "deltaTime: " << deltaTime << ", speed: " << speed << std::endl;
+
+	SDL_Rect nextPos = collider;
+
+	if (dir == 0) {
+		nextPos.x += speed * deltaTime;
+		bool collidedX = false;
+		for (auto& wall : currentMaze->player->walls) {
+			if (checkCollision(nextPos, wall)) {
+				collidedX = true;
+				break;
+			}
+		}
+		if (!collidedX) {
+			collider.x = nextPos.x;
+		}
+		else { 
+			if (rand() % 2) {
+				dir = 1;
+			}
+			speed = -speed; 
+		
+		}
+	}
+	else {
+		nextPos = collider;
+		nextPos.y += speed * deltaTime;
+		bool collidedY = false;
+		for (auto& wall : currentMaze->player->walls) {
+			if (checkCollision(nextPos, wall)) {
+				collidedY = true;
+				break;
+			}
+		}
+		//std::cout << "collidedX: " << collidedY << std::endl;
+
+		if (!collidedY) {
+			collider.y = nextPos.y;
+		}
+		else { 
+			if (rand() % 2) {
+				dir = 0;
+			}
+			speed = -speed; 
+		}
+	}
+
+	
+}
+bool GameObject::checkCollision(SDL_Rect& a, SDL_Rect& b) {
+	return (a.x < b.x + b.w &&
+		a.x + a.w > b.x &&
+		a.y < b.y + b.h &&
+		a.y + a.h > b.y);
+}
 int main(int argc, char* argv[])
 {
 	Game game;
 	game.init();
+	game.mazeFileNames.push_back( "Mazes/house1.txt");
+	game.mazeFileNames.push_back("Mazes/house2.txt");
+	game.mazeFileNames.push_back("Mazes/house3.txt");
+	game.mazeFileNames.push_back("Mazes/house4.txt");
 	game.run();
 	game.quit();
 	return 0;

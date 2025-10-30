@@ -5,22 +5,22 @@
 #include <functional>
 #include <string>
 #include <iostream>
+#include <vector>
 
 class Game;
 class MenuState;
 class WorldMapState;
 class MazeState;
 class Button;
+class Player;
+class Enemy;
+class Resource;
 
 struct Vector2 {
 	float x;
 	float y;
 };
-struct HouseData {
-	std::string name;
-	std::string filePath;
-	bool completed;
-};
+
 class Texture {
 public:
 	void load(std::string filePath, SDL_Renderer* renderer);
@@ -29,9 +29,7 @@ public:
 };
 class House {
 public:
-	void render(SDL_Renderer* renderer);
-	HouseData data;
-	Vector2 position;
+	std::string filePath;
 	SDL_Texture* iconTexture;
 	bool isCompleted;
 
@@ -56,10 +54,10 @@ class GameObject {
 public:
 	void Update();
 	void render();
+	bool checkCollision(SDL_Rect& nextPos, SDL_Rect& wall);
+
 private:
-	//position(x,y)
-	//texture
-	//speed
+	SDL_Texture* texture;
 };
 class GameState {
 public:
@@ -98,42 +96,119 @@ public:
 	std::list<Button> houseButtons;
 	SDL_Texture* titleTexture = nullptr;
 	int topTextW = 500, topTextH = 75;
+	std::vector<House> houses;
+	SDL_Texture* scoreText = nullptr;
+	SDL_Texture* healthText = nullptr;
 private:
-	std::list<House> houses;
+	
 	int selecetedHouseIndex;
 	Vector2 cursorPosition;
 };
 class MazeState: public GameState {
 public:
+	void init(SDL_Renderer* renderer, TTF_Font* font);
 	void loadHouse();
-	void handleEvents() {};
-	void update() {};
-	void render() {};
+	void handleEvents();
+	void update();
+	void render();
+	void buildWalls();
+	void MakeEnemies();
+	void MakeResources();
+	void OnEnter();
 
+	std::vector<std::vector<int>> mazeGrid;
+	std::vector<Enemy*> enemies;
+	std::vector<Resource*> resources;
+	int rows = 12, cols = 18;
+	const int tileSize = 64;
+
+	Player* player;
+
+	SDL_Rect exitRect;
+	bool showExitMessage = false;
+	SDL_Texture* exitText = nullptr;
+
+	SDL_Texture* scoreText = nullptr;
+	SDL_Texture* healthText = nullptr;
+	SDL_Texture* FloorTexture = nullptr;
+	SDL_Texture* WallTexture = nullptr;
+	SDL_Texture* PlayerStartTexture = nullptr;
+	SDL_Texture* EnemyStartTexture = nullptr;
+	SDL_Texture* ResourceTexture = nullptr;
+	SDL_Texture* EndTexture = nullptr;
+	Game* game;
+
+};
+
+class WinLossState :public GameState {
+public:
+	void init(SDL_Renderer* renderer, TTF_Font* font);
+	void render();
+	void handleEvents();
+	void update();
+	Game* game;
+	bool win = false;
+	SDL_Texture* titleTexture = nullptr;
+	SDL_Texture* scoreTexture = nullptr;
+	
+
+private:
+	Button* restartButton = nullptr;
 };
 class Enemy:public GameObject {
 public:
 	void Update();
+	Enemy(int Dir, SDL_Rect Collider, MazeState* CurrentMaze) {
+		this->dir = Dir;
+		std::cout << dir << std::endl;
+		this->collider = Collider;
+		this->currentMaze = CurrentMaze;
+		if (currentMaze == nullptr) {
+			std::cout << "No Maze set" << std::endl;
+		}
+	}
+	void tryMove();
+	Uint32 lastTime;
+	SDL_Rect collider;
+	
 private:
-	//movementpath
-	int currentStep;
+	MazeState* currentMaze;
+	int speed = 150;
+	int dir;
+	
 };
 
-class Player :GameObject {
+class Player: public GameObject {
 public:
-	void handleInput();
-	void update();
+	void handleInput(const Uint8* keys);
+	void update() {};
 	void tryMove();
+	void ExitMaze();
+	
+	float velX = 0, velY = 0;
+	SDL_Rect playerRect = { 100, 100, 40, 40 };
+	Uint32 lastTime;
+	std::vector<SDL_Rect> walls;
+	MazeState* currentMaze;
+	
+
 private:
+	
 	int health = 3;
 	int score = 0;
+	float speed = 200;
 };
 
 class Resource :public GameObject {
 public: 
+	Resource(SDL_Rect Collider) {
+		this->collider = Collider;
+	}
 	void Update();
-private:
+	SDL_Rect collider;
 	bool collected = false;
+
+	
 };
 class Map {
 public:
@@ -158,12 +233,35 @@ public:
 	bool IsRunning() const;
 	void quit();
 	void changeState(GameState* newState);
+	void addResource() { resources += 1; }
+	void takeLife() { 
+		playerLives -= 1;
+	}
+	void resetHealth() {
+		playerLives = 3;
+	}
 	SDL_Renderer* getRenderer();
 	TTF_Font* getFont();
 	WorldMapState* GetWorldMapState();
+	MazeState* GetMazeState();
+	MenuState* GetMenuState() {
+		return menuState;
+	}
+	WinLossState* GetWinLossState() {
+		return winLossState;
+	}
+	
+	int GetResources() {
+		return resources;
+	}
+	int GetHealth() {
+		return playerLives;
+	}
+
 	const int SCREEN_WIDTH = 1600;
 	const int SCREEN_HEIGHT = 900;
 	const int FONT_SIZE = 84;
+	std::vector<std::string> mazeFileNames;
 private:
 	
 	
@@ -173,25 +271,15 @@ private:
 	bool isRunning;
 	bool gameOver;
 	SDL_Color textColor = { 255,0,0,128 };
-	Player player;
 	Map map;
-	int resources = 2;
+	int resources = 0;
+	int playerLives = 3;
 	GameState* currentState;
 	MenuState* menuState;
 	WorldMapState* worldMapState;
 	MazeState* mazeState;
-	std::list<HouseData> houseList;
+	WinLossState* winLossState;
 	int currentHouseIndex;
 };
 
-class TextureManager {
-public:
-	void Load(std::string path);
-	void Draw(); //draw(texture: Texture, position: Vector2) 
-};
 
-class InputHandler {
-public:
-	void keyPressed(std::string key);
-	void mouseClicked(std::string button);
-};
