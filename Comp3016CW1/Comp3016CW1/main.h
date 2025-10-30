@@ -1,6 +1,8 @@
 #pragma once
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include <SDL_image.h>
+#include <SDL_mixer.h>
 #include <list>
 #include <functional>
 #include <string>
@@ -21,12 +23,6 @@ struct Vector2 {
 	float y;
 };
 
-class Texture {
-public:
-	void load(std::string filePath, SDL_Renderer* renderer);
-	void render();
-	void free();
-};
 class House {
 public:
 	std::string filePath;
@@ -79,7 +75,7 @@ public:
 		if (titleTexture) SDL_DestroyTexture(titleTexture);
 	}
 	SDL_Texture* titleTexture = nullptr;
-	int titleW = 0, titleH = 0;
+	int titleW = 300, titleH = 150;
 	std::string getName() const override { return "MenuState"; }
 private:
 	Button* startButton;
@@ -119,7 +115,7 @@ public:
 	std::vector<std::vector<int>> mazeGrid;
 	std::vector<Enemy*> enemies;
 	std::vector<Resource*> resources;
-	int rows = 12, cols = 18;
+	int rows = 13, cols = 20;
 	const int tileSize = 64;
 
 	Player* player;
@@ -160,17 +156,17 @@ public:
 	void Update();
 	Enemy(int Dir, SDL_Rect Collider, MazeState* CurrentMaze) {
 		this->dir = Dir;
-		std::cout << dir << std::endl;
+		//std::cout << dir << std::endl;
 		this->collider = Collider;
 		this->currentMaze = CurrentMaze;
 		if (currentMaze == nullptr) {
-			std::cout << "No Maze set" << std::endl;
+			std::cerr << "No Maze set" << std::endl;
 		}
 	}
 	void tryMove();
 	Uint32 lastTime;
 	SDL_Rect collider;
-	
+	SDL_Texture* Texture = nullptr;
 private:
 	MazeState* currentMaze;
 	int speed = 150;
@@ -191,7 +187,7 @@ public:
 	std::vector<SDL_Rect> walls;
 	MazeState* currentMaze;
 	
-
+	SDL_Texture* Texture = nullptr;
 private:
 	
 	int health = 3;
@@ -207,7 +203,7 @@ public:
 	void Update();
 	SDL_Rect collider;
 	bool collected = false;
-
+	SDL_Texture* Texture = nullptr;
 	
 };
 class Map {
@@ -233,6 +229,7 @@ public:
 	bool IsRunning() const;
 	void quit();
 	void changeState(GameState* newState);
+	void AddMazes();
 	void addResource() { resources += 1; }
 	void takeLife() { 
 		playerLives -= 1;
@@ -257,14 +254,33 @@ public:
 	int GetHealth() {
 		return playerLives;
 	}
-
+	void IncHousesVisited(){
+		housesVisited += 1;
+		//std::cout <<"HousesVisited: " << housesVisited << std::endl;
+		if (housesVisited >= 10 && playerLives >0) {
+			winLossState->win = true;
+			changeState(winLossState);
+		}
+	
+	}
+	void resetParams() {
+		resources = 0;
+		playerLives = 3;
+		housesVisited = 0;
+	}
 	const int SCREEN_WIDTH = 1600;
 	const int SCREEN_HEIGHT = 900;
 	const int FONT_SIZE = 84;
 	std::vector<std::string> mazeFileNames;
+	SDL_Texture* bgImage;
+
+	Mix_Music* bgMusic;
+	Mix_Chunk* collectSound;
+	Mix_Chunk* clickSound;
+
 private:
 	
-	
+	int housesVisited = 0;
 	SDL_Window* window;
 	SDL_Renderer* renderer;
 	TTF_Font* font;
