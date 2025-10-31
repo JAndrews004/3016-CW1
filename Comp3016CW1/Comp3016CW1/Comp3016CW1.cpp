@@ -44,6 +44,8 @@ void Game::init() {
 		if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
 			cerr << "SDL_image could not initialize! " << IMG_GetError() << endl;
 		}
+		SDL_Init(SDL_INIT_AUDIO);
+
 		srand(SDL_GetTicks());
 
 		Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
@@ -208,10 +210,6 @@ void MenuState::handleEvents() {
 		endButton->handleEvents(e);
 	}
 }
-
-void MenuState::update() {
-	//button effects or animations here
-}
 void MenuState::render() {
 	
 	//std::cout << "Rendering\n";
@@ -356,10 +354,6 @@ void WorldMapState::handleEvents() {
 			button.handleEvents(e);
 		}
 	}
-};
-
-void WorldMapState::update() {
-
 };
 
 void WorldMapState::render() {
@@ -563,6 +557,56 @@ void MazeState :: loadHouse() {
 		file.close();
 	}
 
+	//loading default maze layout if file is empty
+	if (mazeGrid.size() == 0) {
+		mazeGrid = {
+		{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+		{1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+		{1,0,1,1,0,1,1,1,1,0,1,1,1,1,3,1,1,0,0,1},
+		{1,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,1,0,0,1},
+		{1,0,1,0,1,1,1,0,1,1,1,1,0,1,1,0,1,1,0,1},
+		{1,0,0,0,1,0,0,0,0,0,0,1,0,0,1,0,0,0,0,1},
+		{1,1,1,0,1,0,1,1,1,1,0,1,1,0,1,1,1,1,0,1},
+		{1,0,0,0,0,0,1,0,0,1,0,3,0,0,0,0,0,1,0,1},
+		{1,0,1,1,1,0,1,0,1,1,1,1,1,1,0,1,0,1,0,1},
+		{1,0,0,4,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1},
+		{1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,1,0,1,0,1},
+		{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,1},
+		{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}
+		};;
+	}
+
+	// checking file has player start and end if not load default
+	bool PlayerStartExists = false;
+	bool PlayerExitExists = false;
+	for (const auto& row : mazeGrid) {
+		for (int num : row) {
+			if (num == 2) {
+				PlayerStartExists = true;
+			}
+			if (num == 5) {
+				PlayerExitExists = true;
+			}
+		}
+		
+	}
+	if (!PlayerStartExists || !PlayerExitExists) {
+		mazeGrid = {
+		{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+		{1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+		{1,0,1,1,0,1,1,1,1,0,1,1,1,1,3,1,1,0,0,1},
+		{1,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,1,0,0,1},
+		{1,0,1,0,1,1,1,0,1,1,1,1,0,1,1,0,1,1,0,1},
+		{1,0,0,0,1,0,0,0,0,0,0,1,0,0,1,0,0,0,0,1},
+		{1,1,1,0,1,0,1,1,1,1,0,1,1,0,1,1,1,1,0,1},
+		{1,0,0,0,0,0,1,0,0,1,0,3,0,0,0,0,0,1,0,1},
+		{1,0,1,1,1,0,1,0,1,1,1,1,1,1,0,1,0,1,0,1},
+		{1,0,0,4,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1},
+		{1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,1,0,1,0,1},
+		{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,1},
+		{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}
+		};;
+	}
 	/* testing to see if file loads into mazeGrid correctly
 	for (const auto& row : mazeGrid) {
 		for (int num : row) {
@@ -777,9 +821,6 @@ void WinLossState::handleEvents() {
 		
 	}
 }
-void WinLossState::update() {
-
-}
 void Player::handleInput(const Uint8 * keys) {
 	velX = 0;
 	velY = 0;
@@ -834,9 +875,6 @@ void Player::tryMove() {
 	if (!collidedY) playerRect.y = nextPos.y;
 }
 
-void Enemy::Update() {
-	
-}
 void Enemy::tryMove() {
 	Uint32 currentTime = SDL_GetTicks();
 	float deltaTime = (currentTime - lastTime) / 1000.0f;

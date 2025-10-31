@@ -48,12 +48,8 @@ private:
 };
 class GameObject {
 public:
-	void Update();
-	void render();
 	bool checkCollision(SDL_Rect& nextPos, SDL_Rect& wall);
 
-private:
-	SDL_Texture* texture;
 };
 class GameState {
 public:
@@ -66,7 +62,6 @@ public:
 class MenuState : public GameState {
 public:
 	void handleEvents();
-	void update();
 	void render();
 	void init(SDL_Renderer* renderer, TTF_Font* font);
 	~MenuState() {
@@ -84,9 +79,7 @@ private:
 class WorldMapState :public GameState {
 public:
 	void init(SDL_Renderer* renderer, TTF_Font* font);
-	void onEnter();
 	void handleEvents();
-	void update();
 	void render();
 
 	std::list<Button> houseButtons;
@@ -96,8 +89,7 @@ public:
 	SDL_Texture* scoreText = nullptr;
 	SDL_Texture* healthText = nullptr;
 private:
-	
-	int selecetedHouseIndex;
+
 	Vector2 cursorPosition;
 };
 class MazeState: public GameState {
@@ -141,7 +133,6 @@ public:
 	void init(SDL_Renderer* renderer, TTF_Font* font);
 	void render();
 	void handleEvents();
-	void update();
 	Game* game;
 	bool win = false;
 	SDL_Texture* titleTexture = nullptr;
@@ -153,7 +144,6 @@ private:
 };
 class Enemy:public GameObject {
 public:
-	void Update();
 	Enemy(int Dir, SDL_Rect Collider, MazeState* CurrentMaze) {
 		this->dir = Dir;
 		//std::cout << dir << std::endl;
@@ -177,7 +167,6 @@ private:
 class Player: public GameObject {
 public:
 	void handleInput(const Uint8* keys);
-	void update() {};
 	void tryMove();
 	void ExitMaze();
 	
@@ -190,8 +179,6 @@ public:
 	SDL_Texture* Texture = nullptr;
 private:
 	
-	int health = 3;
-	int score = 0;
 	float speed = 200;
 };
 
@@ -205,17 +192,6 @@ public:
 	bool collected = false;
 	SDL_Texture* Texture = nullptr;
 	
-};
-class Map {
-public:
-	void loadFromFile(std::string file);
-	void draw();
-private:
-	//grid[rows][columns]
-	//walltexture
-	//floortexture
-	//Vector2 playerStart
-	//Vector2 exitpos
 };
 
 class Game {
@@ -287,7 +263,6 @@ private:
 	bool isRunning;
 	bool gameOver;
 	SDL_Color textColor = { 255,0,0,128 };
-	Map map;
 	int resources = 0;
 	int playerLives = 3;
 	GameState* currentState;
@@ -295,7 +270,7 @@ private:
 	WorldMapState* worldMapState;
 	MazeState* mazeState;
 	WinLossState* winLossState;
-	int currentHouseIndex;
+
 };
 
 
