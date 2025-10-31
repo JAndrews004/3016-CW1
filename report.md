@@ -34,12 +34,12 @@ Lastly, I have an audio system which plays background music as well as sound eff
 ## UML / Class Design Diagram
 
 ## Sample Screens
-![Testing](./screenshots/menu.png)
-![Testing](./screenshots/worldmap.png)
-![Testing](./screenshots/maze.png)
+![Menu](./ScreenShots/menu.png)
+![WorldMap](./ScreenShots/worldmap.png)
+![Maze](./ScreenShots/maze.png)
 
 ## Exception Handling and Test Cases
-![Testing](./screenshots/testing.png)
+![Testing](./ScreenShots/testing.png)
 
 
 ## Test Plan Summary
