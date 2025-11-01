@@ -1,7 +1,7 @@
 # Zombie Apocalypse Maze Game
 
 ## Video Demonstration
-
+https://youtu.be/PEQ0ciStVqY 
 ## Gameplay Description
 The main gameplay of this game is of the player entering mazes with enemies and collectables to get as high of a score as possible.
 The main game loop consists of the player choosing a 'house' to enter then entering and navigating a maze to reach an exit getting as many collectables as possible while avoiding the enemies.
@@ -32,7 +32,7 @@ Next i have resource collection which is done with a simple collision check betw
 Lastly, I have an audio system which plays background music as well as sound effects for collecting resources and clicking a UI button. I used SDL_mixer for looping music and adjusting the volume, and event based SFX.
 
 ## UML / Class Design Diagram
-
+![General arcitecture](./UML/menu.png)
 ## Sample Screens
 ![Menu](./ScreenShots/menu.png)
 ![WorldMap](./ScreenShots/worldmap.png)
@@ -53,3 +53,5 @@ Stability - No crashes or memory leaks during long gameplay
 ## Further Details
 
 ## Evaluation
+Overall i am proud with the game i was able to produce for this coursework assignment. I think having a complete game with all assets (e.g. SFX, textures e.t.c.) is a substantial amount of work for this. I have also learnt a lot while making this game mainly to do with SDL2 and on using OOP. Before this project i didn't know where polymorphism would be used but i can see the applications now and am looking forward to implementing it in my furture projects. If i was to redo the game i would expand the world map section as it is a bit basic and would have liked to do a proper map where the player selects houses on it (a more visual UI rather than buttons). But if i spent more time on it this time around i would not have been able to complete the maze section as that took the most time and is the most important gameplay element.
+
