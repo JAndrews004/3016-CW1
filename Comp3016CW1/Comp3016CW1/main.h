@@ -243,6 +243,9 @@ public:
 		resources = 0;
 		playerLives = 3;
 		housesVisited = 0;
+		winLossState->win = false;
+		
+		
 	}
 	const int SCREEN_WIDTH = 1600;
 	const int SCREEN_HEIGHT = 900;

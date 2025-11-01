@@ -784,6 +784,15 @@ void WinLossState::render() {
 		SDL_QueryTexture(titleTexture, nullptr, nullptr, &topTextW, &topTextH);
 		SDL_FreeSurface(titleTextSurface);
 	}
+	else {
+		SDL_Color red = { 255, 0, 0, 255 };
+		string message = "YOU DIED";
+		SDL_Surface* titleTextSurface = TTF_RenderText_Solid(game->getFont(), message.c_str(), red);
+		titleTexture = SDL_CreateTextureFromSurface(game->getRenderer(), titleTextSurface);
+		int topTextW = 800, topTextH = 300;
+		SDL_QueryTexture(titleTexture, nullptr, nullptr, &topTextW, &topTextH);
+		SDL_FreeSurface(titleTextSurface);
+	}
 	
 	SDL_SetRenderDrawColor(game->getRenderer(), 0, 0, 0, 255);
 	SDL_RenderClear(game->getRenderer());
