@@ -32,7 +32,7 @@ Next i have resource collection which is done with a simple collision check betw
 Lastly, I have an audio system which plays background music as well as sound effects for collecting resources and clicking a UI button. I used SDL_mixer for looping music and adjusting the volume, and event based SFX.
 
 ## UML / Class Design Diagram
-![General arcitecture](./UML/menu.png)
+![General arcitecture](./ScreenShots/UML.png)
 ## Sample Screens
 ![Menu](./ScreenShots/menu.png)
 ![WorldMap](./ScreenShots/worldmap.png)
